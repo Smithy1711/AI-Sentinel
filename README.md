@@ -80,12 +80,19 @@ GITHUB_CLIENT_ID=<github oauth app client id>
 GITHUB_CLIENT_SECRET=<github oauth app client secret>
 GITHUB_REDIRECT_URI=<your Railway web URL>/integrations/github/callback
 GITHUB_USE_MOCK=false
+BOOTSTRAP_SEED_ON_STARTUP=true
+BOOTSTRAP_USER_EMAIL=<initial admin email>
+BOOTSTRAP_USER_PASSWORD=<initial admin password>
+BOOTSTRAP_USER_DISPLAY_NAME=<initial admin display name>
+BOOTSTRAP_WORKSPACE_NAME=<initial workspace name>
+BOOTSTRAP_WORKSPACE_SLUG=<initial-workspace-slug>
 ```
 
 Notes:
 
 ```text
 - The API start command runs `prisma migrate deploy` before starting the server.
+- If BOOTSTRAP_SEED_ON_STARTUP=true, the API also runs the Prisma seed once on startup so you have an initial account and workspace in production.
 - Railway will provide PORT automatically.
 - If the API sits behind Railway's proxy, set TRUST_PROXY=true.
 ```

@@ -10,6 +10,12 @@ await run("pnpm", ["--dir", repoRoot, "--filter", "@workspace/api-server", "run"
   cwd: repoRoot,
 });
 
+if (process.env.BOOTSTRAP_SEED_ON_STARTUP === "true") {
+  await run("pnpm", ["--dir", repoRoot, "--filter", "@workspace/api-server", "run", "prisma:seed"], {
+    cwd: repoRoot,
+  });
+}
+
 await run("node", [resolve(apiRoot, "dist", "server.js")], {
   cwd: apiRoot,
   stdio: "inherit",

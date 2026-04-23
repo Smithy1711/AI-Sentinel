@@ -18,7 +18,11 @@ import {
 import bcrypt from "bcryptjs";
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
+  const bootstrapSeedEnabled =
+    process.env.BOOTSTRAP_SEED_ON_STARTUP === "true" ||
+    process.env.ALLOW_PRODUCTION_SEED === "true";
+
+  if (process.env.NODE_ENV === "production" && !bootstrapSeedEnabled) {
     console.log("Skipping seed in production.");
     return;
   }
@@ -34,26 +38,36 @@ async function main(): Promise<void> {
   });
 
   const email =
-    process.env.DEMO_USER_EMAIL ?? "demo@ai-exposure-review.local";
+    process.env.BOOTSTRAP_USER_EMAIL ??
+    process.env.DEMO_USER_EMAIL ??
+    "demo@ai-exposure-review.local";
   const password =
-    process.env.DEMO_USER_PASSWORD ?? "DemoPassword123!";
+    process.env.BOOTSTRAP_USER_PASSWORD ??
+    process.env.DEMO_USER_PASSWORD ??
+    "DemoPassword123!";
+  const displayName =
+    process.env.BOOTSTRAP_USER_DISPLAY_NAME ?? "Demo User";
   const workspaceName =
-    process.env.DEMO_WORKSPACE_NAME ?? "Demo Workspace";
+    process.env.BOOTSTRAP_WORKSPACE_NAME ??
+    process.env.DEMO_WORKSPACE_NAME ??
+    "Demo Workspace";
   const workspaceSlug =
-    process.env.DEMO_WORKSPACE_SLUG ?? "demo-workspace";
+    process.env.BOOTSTRAP_WORKSPACE_SLUG ??
+    process.env.DEMO_WORKSPACE_SLUG ??
+    "demo-workspace";
   const passwordHash = await bcrypt.hash(password, 12);
 
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-      displayName: "Demo User",
+      displayName,
       passwordHash,
       isActive: true,
       deletedAt: null,
     },
     create: {
       email,
-      displayName: "Demo User",
+      displayName,
       passwordHash,
       isActive: true,
     },
@@ -290,7 +304,7 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log("Seeded demo user and workspace.");
+  console.log("Seeded bootstrap user and workspace.");
   console.log(`Email: ${email}`);
   console.log(`Password: ${password}`);
 
