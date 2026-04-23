@@ -4,6 +4,6 @@ buildCommand = "cd ../.. && pnpm install --frozen-lockfile && pnpm railway:api:b
 
 [deploy]
 startCommand = "cd ../.. && pnpm railway:api:start"
-healthcheckPath = "/api/v1/health"
+healthcheckPath = "/api/v1/health/live"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

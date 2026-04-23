@@ -48,6 +48,7 @@ Backend URLs after startup:
 ```text
 API: http://localhost:4000/api/v1
 Health: http://localhost:4000/api/v1/health
+Liveness: http://localhost:4000/api/v1/health/live
 Swagger UI: http://localhost:4000/docs
 ```
 
@@ -95,6 +96,7 @@ Notes:
 - If BOOTSTRAP_SEED_ON_STARTUP=true, the API also runs the Prisma seed once on startup so you have an initial account and workspace in production.
 - Railway will provide PORT automatically.
 - If the API sits behind Railway's proxy, set TRUST_PROXY=true.
+- Railway health checks should use /api/v1/health/live so the service is considered healthy once the API process is up, while /api/v1/health remains the PostgreSQL-backed readiness check.
 ```
 
 ### Web service env
