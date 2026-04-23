@@ -1,6 +1,5 @@
-import { Bell, Search, LogOut, User as UserIcon, Settings } from "lucide-react";
+import { Bell, Search, LogOut, Settings, ChevronDown, Plus } from "lucide-react";
 import { useLocation } from "wouter";
-import { logout } from "@/lib/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,19 +10,54 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/lib/session";
+import { formatEnumLabel, getInitials } from "@/lib/presenters";
 
 export function Topbar() {
   const [, setLocation] = useLocation();
+  const { activeWorkspace, signOut, user, workspaces, selectWorkspace } = useSession();
 
   const handleLogout = () => {
-    logout();
+    signOut();
     setLocation("/");
   };
 
   return (
     <div className="flex h-14 items-center justify-between border-b bg-card px-6">
       <div className="flex items-center gap-4">
-        <span className="font-semibold text-sm">Acme Corp Workspace</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2 px-3" variant="outline">
+              <span className="font-semibold text-sm">
+                {activeWorkspace?.name ?? "Select Workspace"}
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {workspaces.map((membership) => (
+              <DropdownMenuItem
+                disabled={membership.isActive}
+                key={membership.workspace.id}
+                onClick={() => void selectWorkspace(membership.workspace.id)}
+              >
+                <div className="flex flex-col">
+                  <span>{membership.workspace.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatEnumLabel(membership.role)}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setLocation("/onboarding")}>
+              <Plus className="mr-2 h-4 w-4" />
+              New workspace
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-4">
@@ -45,12 +79,19 @@ export function Topbar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs">
-                JD
+                {getInitials(user?.displayName ?? user?.email)}
               </div>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              <div className="flex flex-col">
+                <span>{user?.displayName ?? "My Account"}</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {user?.email}
+                </span>
+              </div>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setLocation("/settings")}>
               <Settings className="mr-2 h-4 w-4" />

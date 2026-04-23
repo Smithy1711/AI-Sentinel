@@ -155,6 +155,43 @@ const assessmentConfigurationSchema = {
   },
 } as const;
 
+const assessmentLatestRunSchema = {
+  type: "object",
+  nullable: true,
+  required: [
+    "id",
+    "status",
+    "progressPercent",
+    "findingsCount",
+    "overallRiskLevel",
+    "updatedAt",
+  ],
+  properties: {
+    id: { type: "string" },
+    status: {
+      type: "string",
+      enum: [
+        "QUEUED",
+        "PREPARING",
+        "SCANNING",
+        "NORMALIZING",
+        "REPORT_GENERATION",
+        "COMPLETED",
+        "FAILED",
+        "CANCELED",
+      ],
+    },
+    progressPercent: { type: "integer" },
+    findingsCount: { type: "integer" },
+    overallRiskLevel: {
+      type: "string",
+      nullable: true,
+      enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+    },
+    updatedAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
 const assessmentViewSchema = {
   type: "object",
   required: [
@@ -165,6 +202,7 @@ const assessmentViewSchema = {
     "status",
     "repository",
     "configuration",
+    "latestRun",
     "latestRunAt",
     "createdAt",
     "updatedAt",
@@ -180,6 +218,7 @@ const assessmentViewSchema = {
     },
     repository: assessmentRepositorySummarySchema,
     configuration: assessmentConfigurationSchema,
+    latestRun: assessmentLatestRunSchema,
     latestRunAt: { type: "string", format: "date-time", nullable: true },
     createdAt: { type: "string", format: "date-time" },
     updatedAt: { type: "string", format: "date-time" },

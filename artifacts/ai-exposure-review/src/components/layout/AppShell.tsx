@@ -1,8 +1,8 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useLocation } from "wouter";
-import { isAuthenticated } from "@/lib/auth";
+import { useSession } from "@/lib/session";
 
 interface AppShellProps {
   children: ReactNode;
@@ -10,23 +10,49 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [location, setLocation] = useLocation();
-  const isAuthPage = location === "/" || location === "/signin" || location === "/signup" || location === "/forgot-password";
-  const authenticated = isAuthenticated();
+  const { status, isAuthenticated, activeWorkspace } = useSession();
+  const isPublicPage =
+    location === "/" ||
+    location === "/signin" ||
+    location === "/signup" ||
+    location === "/forgot-password";
+  const isSetupPage =
+    location === "/onboarding" || location === "/integrations/github/callback";
 
-  // Simple client-side protection
-  if (!isAuthPage && !authenticated) {
-    setLocation("/signin");
-    return null;
-  }
-
-  if (isAuthPage && authenticated) {
-    if (location !== "/") {
-      setLocation("/dashboard");
+  useEffect(() => {
+    if (status === "loading") {
+      return;
     }
+
+    if (!isAuthenticated && !isPublicPage) {
+      setLocation("/signin");
+      return;
+    }
+
+    if (isAuthenticated && !activeWorkspace && !isSetupPage) {
+      setLocation("/onboarding");
+      return;
+    }
+
+    if (isAuthenticated && isPublicPage) {
+      setLocation(activeWorkspace ? "/dashboard" : "/onboarding");
+    }
+  }, [activeWorkspace, isAuthenticated, isPublicPage, isSetupPage, location, setLocation, status]);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Loading workspace...</div>
+      </div>
+    );
   }
 
-  if (isAuthPage) {
+  if (isPublicPage || isSetupPage) {
     return <div className="min-h-screen bg-background">{children}</div>;
+  }
+
+  if (!isAuthenticated || !activeWorkspace) {
+    return null;
   }
 
   return (

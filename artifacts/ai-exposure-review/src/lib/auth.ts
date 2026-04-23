@@ -1,11 +1,21 @@
-export function isAuthenticated(): boolean {
-  return localStorage.getItem("ai_exposure_authed") === "true";
+const ACCESS_TOKEN_STORAGE_KEY = "ai_exposure_review_access_token";
+
+export function getAccessToken() {
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
 }
 
-export function login(): void {
-  localStorage.setItem("ai_exposure_authed", "true");
+export function persistAccessToken(accessToken: string) {
+  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
 }
 
-export function logout(): void {
-  localStorage.removeItem("ai_exposure_authed");
+export function clearAccessToken() {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+}
+
+export function isAuthenticated() {
+  return Boolean(getAccessToken());
+}
+
+export function logout() {
+  clearAccessToken();
 }

@@ -1,218 +1,345 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
+import { Activity, ArrowLeft, CheckCircle2, Circle, FileText, Play, RefreshCw, XCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { mockAssessments } from "@/data/mockData";
-import { StatusBadge, SeverityBadge } from "@/components/shared/badges";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2, Circle, ArrowLeft, Download, Activity, FileText } from "lucide-react";
-import { SiGithub, SiGitlab, SiBitbucket } from "react-icons/si";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { SeverityBadge, StatusBadge } from "@/components/shared/badges";
+import { api } from "@/lib/api";
+import { formatEnumLabel } from "@/lib/presenters";
+import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import type { AssessmentRunStatus } from "@/types";
+
+const activeRunStatuses: AssessmentRunStatus[] = [
+  "QUEUED",
+  "PREPARING",
+  "SCANNING",
+  "NORMALIZING",
+  "REPORT_GENERATION",
+];
 
 export default function AssessmentDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const assessment = mockAssessments.find(a => a.id === id) || mockAssessments[0];
+  const queryClient = useQueryClient();
+  const { accessToken, activeWorkspace } = useSession();
 
-  const providerIcon = assessment.repoUrl.includes("github") ? <SiGithub className="w-4 h-4" /> : 
-                       assessment.repoUrl.includes("gitlab") ? <SiGitlab className="w-4 h-4" /> : 
-                       <SiBitbucket className="w-4 h-4" />;
+  const assessmentQuery = useQuery({
+    queryKey: ["assessment", activeWorkspace?.id, id],
+    enabled: Boolean(accessToken && activeWorkspace && id),
+    queryFn: () => api.assessments.get(accessToken!, activeWorkspace!.id, id!),
+    refetchInterval: 5000,
+  });
+
+  const latestRunId = assessmentQuery.data?.latestRun?.id ?? null;
+  const shouldPollRun =
+    assessmentQuery.data?.latestRun &&
+    activeRunStatuses.includes(assessmentQuery.data.latestRun.status);
+
+  const runQuery = useQuery({
+    queryKey: ["assessment-run", activeWorkspace?.id, latestRunId],
+    enabled: Boolean(accessToken && activeWorkspace && latestRunId),
+    queryFn: () => api.runs.get(accessToken!, activeWorkspace!.id, latestRunId!),
+    refetchInterval: shouldPollRun ? 3000 : false,
+  });
+
+  const aggregatesQuery = useQuery({
+    queryKey: ["assessment-findings-aggregate", activeWorkspace?.id, id],
+    enabled: Boolean(accessToken && activeWorkspace && id),
+    queryFn: () => api.findings.aggregateForAssessment(accessToken!, activeWorkspace!.id, id!),
+  });
+
+  const activityQuery = useQuery({
+    queryKey: ["assessment-activity", activeWorkspace?.id, id],
+    enabled: Boolean(accessToken && activeWorkspace && id),
+    queryFn: () => api.assessments.activity(accessToken!, activeWorkspace!.id, id!),
+  });
+
+  const reportQuery = useQuery({
+    queryKey: ["assessment-report-latest", activeWorkspace?.id, id],
+    enabled: Boolean(accessToken && activeWorkspace && id),
+    queryFn: () => api.reports.latest(accessToken!, activeWorkspace!.id, id!),
+  });
+
+  const error =
+    assessmentQuery.error ||
+    runQuery.error ||
+    aggregatesQuery.error ||
+    activityQuery.error ||
+    reportQuery.error;
+
+  if (assessmentQuery.isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading assessment...</div>;
+  }
+
+  if (!assessmentQuery.data || error) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Unable to load assessment</AlertTitle>
+        <AlertDescription>
+          {error instanceof Error ? error.message : "Please try again."}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const assessment = assessmentQuery.data;
+  const run = runQuery.data ?? null;
+  const aggregates = aggregatesQuery.data;
+  const report = reportQuery.data;
+  const activity = activityQuery.data?.items ?? [];
+
+  const launchAssessment = async () => {
+    if (!accessToken || !activeWorkspace) {
+      return;
+    }
+
+    await api.assessments.launch(accessToken, activeWorkspace.id, assessment.id);
+    await queryClient.invalidateQueries();
+  };
+
+  const cancelAssessment = async () => {
+    if (!accessToken || !activeWorkspace) {
+      return;
+    }
+
+    await api.assessments.cancel(accessToken, activeWorkspace.id, assessment.id);
+    await queryClient.invalidateQueries();
+  };
+
+  const generateReport = async () => {
+    if (!accessToken || !activeWorkspace) {
+      return;
+    }
+
+    const generatedReport = await api.reports.generate(accessToken, activeWorkspace.id, assessment.id);
+    await queryClient.invalidateQueries();
+    setLocation(`/reports/${generatedReport.id}`);
+  };
+
+  const launchDisabled =
+    assessment.latestRun !== null &&
+    activeRunStatuses.includes(assessment.latestRun.status);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
-      <Button variant="ghost" size="sm" onClick={() => setLocation("/assessments")} className="mb-2 -ml-3">
-        <ArrowLeft className="w-4 h-4 mr-2" />
+      <Button className="mb-2 -ml-3" onClick={() => setLocation("/assessments")} size="sm" variant="ghost">
+        <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Assessments
       </Button>
 
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold tracking-tight">{assessment.projectName}</h1>
-            <StatusBadge status={assessment.status} className="text-sm px-2 py-0.5" />
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">{assessment.name}</h1>
+            <StatusBadge className="text-sm px-2 py-0.5" status={assessment.status} />
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              {providerIcon}
-              {assessment.repoUrl.replace("https://", "")}
-            </span>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span>{assessment.repository?.fullName ?? "No repository connected"}</span>
             <span>•</span>
-            <span className="flex items-center gap-1.5">
-              <Circle className="w-3 h-3 fill-current text-primary" />
-              {assessment.branch}
-            </span>
+            <span>{assessment.configuration.branch ?? assessment.repository?.defaultBranch ?? "No branch set"}</span>
             <span>•</span>
-            <span>Started {new Date(assessment.createdAt).toLocaleString()}</span>
+            <span>Created {new Date(assessment.createdAt).toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {assessment.status === "Completed" && (
-            <>
-              <div className="flex flex-col items-end mr-4">
-                <span className="text-sm text-muted-foreground mb-1">Overall Score</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{assessment.score}/100</span>
-                  <SeverityBadge severity={assessment.riskLevel} />
-                </div>
-              </div>
-              <Button variant="outline" onClick={() => setLocation(`/reports/${assessment.id}`)}>
-                <Download className="w-4 h-4 mr-2" />
-                Report
-              </Button>
-            </>
-          )}
-          <Button onClick={() => setLocation(`/assessments/${assessment.id}/findings`)}>
-            View Findings
+        <div className="flex flex-wrap items-center gap-3">
+          <Button disabled={launchDisabled} onClick={() => void launchAssessment()} variant="outline">
+            <Play className="mr-2 h-4 w-4" />
+            {assessment.latestRun ? "Run Again" : "Launch"}
           </Button>
+          {launchDisabled ? (
+            <Button onClick={() => void cancelAssessment()} variant="outline">
+              <XCircle className="mr-2 h-4 w-4" />
+              Cancel Run
+            </Button>
+          ) : null}
+          {report ? (
+            <Button onClick={() => setLocation(`/reports/${report.id}`)}>
+              <FileText className="mr-2 h-4 w-4" />
+              Open Report
+            </Button>
+          ) : assessment.status === "COMPLETED" ? (
+            <Button onClick={() => void generateReport()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Generate Report
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="findings" onClick={() => setLocation(`/assessments/${assessment.id}/findings`)}>
-            Findings
-          </TabsTrigger>
-          <TabsTrigger value="evidence">Evidence</TabsTrigger>
-          <TabsTrigger value="activity">Activity Log</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Assessment Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="relative pl-6 space-y-6 before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-muted before:to-transparent">
-                  {[
-                    { title: "Repository Connected", desc: "Successfully authenticated and cloned repository", done: true },
-                    { title: "Static Analysis", desc: "Scanned AST for hardcoded secrets and known vulns", done: true },
-                    { title: "Dynamic Probes", desc: "Executed fuzzing payloads against staging endpoint", done: assessment.status === "Completed" || assessment.status === "Running" },
-                    { title: "Report Generation", desc: "Compiling findings into actionable report", done: assessment.status === "Completed" },
-                  ].map((step, idx) => (
-                    <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      <div className={cn(
-                        "flex items-center justify-center w-6 h-6 rounded-full border-2 bg-background absolute left-0 md:left-1/2 -translate-x-1/2",
-                        step.done ? "border-emerald-500 text-emerald-500" : "border-muted-foreground text-muted-foreground"
-                      )}>
-                        {step.done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <div className="w-1.5 h-1.5 rounded-full bg-current" />}
+      <div className="grid gap-6 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Latest Run</CardTitle>
+            <CardDescription>
+              Current orchestration state for the most recent assessment execution.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {run ? (
+              <>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{run.currentMessage ?? formatEnumLabel(run.status)}</span>
+                    <span className="font-medium">{run.progressPercent}%</span>
+                  </div>
+                  <Progress value={run.progressPercent} />
+                </div>
+
+                <div className="relative pl-6 space-y-6 before:absolute before:inset-y-0 before:left-[11px] before:w-0.5 before:bg-muted">
+                  {run.timeline.map((event) => (
+                    <div className="relative flex gap-4" key={event.id}>
+                      <div
+                        className={cn(
+                          "absolute left-[-6px] top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 bg-background",
+                          event.status === "COMPLETED"
+                            ? "border-emerald-500 text-emerald-500"
+                            : event.status === "FAILED" || event.status === "CANCELED"
+                              ? "border-red-500 text-red-500"
+                              : "border-primary text-primary",
+                        )}
+                      >
+                        {event.status === "COMPLETED" ? (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        ) : (
+                          <Circle className="h-2.5 w-2.5 fill-current" />
+                        )}
                       </div>
-                      <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] ml-6 md:ml-0 md:group-odd:text-right md:group-even:text-left">
-                        <h4 className={cn("font-medium", step.done ? "text-foreground" : "text-muted-foreground")}>{step.title}</h4>
-                        <p className="text-sm text-muted-foreground">{step.desc}</p>
+                      <div className="w-full">
+                        <div className="flex items-center justify-between gap-4">
+                          <h4 className="font-medium">{formatEnumLabel(event.status)}</h4>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{event.message}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This assessment has not been launched yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
-            <div className="space-y-6">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Findings Summary</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-destructive" /><span className="text-sm">Critical</span></div>
-                    <span className="font-medium">4</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500" /><span className="text-sm">High</span></div>
-                    <span className="font-medium">8</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-sm">Medium</span></div>
-                    <span className="font-medium">14</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500" /><span className="text-sm">Low</span></div>
-                    <span className="font-medium">22</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Detected AI Surface</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Providers</span>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">OpenAI GPT-4o</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Frameworks</span>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">LangChain</span>
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">FastAPI</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Vector Store</span>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">Pinecone</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Tools detected</span>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">Email</span>
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">Calendar</span>
-                      <span className="text-xs px-2 py-1 bg-muted rounded-md font-medium">Web Search</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-        <TabsContent value="evidence">
+        <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Evidence Files</CardTitle>
-              <CardDescription>Raw logs and payload responses from the assessment run.</CardDescription>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Findings Summary</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                <h3 className="font-semibold text-lg">No evidence files available yet</h3>
-                <p className="text-muted-foreground max-w-sm mt-2">
-                  Evidence files will appear here once the relevant dynamic probes complete.
-                </p>
+            <CardContent className="space-y-2">
+              {aggregates ? (
+                aggregates.bySeverity.length > 0 ? (
+                  aggregates.bySeverity.map((entry) => (
+                    <div className="flex items-center justify-between" key={entry.severity}>
+                      <div className="flex items-center gap-2">
+                        <SeverityBadge severity={entry.severity} />
+                      </div>
+                      <span className="font-medium">{entry.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No findings recorded yet.</p>
+                )
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div>
+                <span className="block text-xs text-muted-foreground">AI Provider</span>
+                <span>{assessment.configuration.aiProvider ? formatEnumLabel(assessment.configuration.aiProvider) : "-"}</span>
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground">Architecture</span>
+                <span>
+                  {assessment.configuration.aiArchitectureType
+                    ? formatEnumLabel(assessment.configuration.aiArchitectureType)
+                    : "-"}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground">Staging URL</span>
+                <span>{assessment.configuration.stagingUrl ?? "-"}</span>
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground">Scope Checks</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {assessment.configuration.selectedScopeChecks.length > 0 ? (
+                    assessment.configuration.selectedScopeChecks.map((check) => (
+                      <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium" key={check}>
+                        {formatEnumLabel(check)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">No scope selected</span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="activity">
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Log</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  "Assessment started by Jane Doe",
-                  "Repository connected successfully",
-                  "Static analysis complete - 12 findings detected",
-                  "Dynamic analysis started on staging.example.com",
-                ].map((act, i) => (
-                  <div key={i} className="flex gap-4">
-                    <Activity className="w-4 h-4 mt-1 text-muted-foreground" />
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {activity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No assessment activity yet.</p>
+              ) : (
+                activity.map((item) => (
+                  <div className="flex gap-4" key={item.id}>
+                    <Activity className="mt-1 h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium">{act}</p>
-                      <p className="text-xs text-muted-foreground">Today at 10:00 AM</p>
+                      <p className="text-sm font-medium">{formatEnumLabel(item.action)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Next Actions</CardTitle>
+            <CardDescription>Jump into the outputs generated for this assessment.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full justify-start" onClick={() => setLocation(`/assessments/${assessment.id}/findings`)} variant="outline">
+              View Findings
+            </Button>
+            {report ? (
+              <Button className="w-full justify-start" onClick={() => setLocation(`/reports/${report.id}`)} variant="outline">
+                Open Latest Report
+              </Button>
+            ) : null}
+            {assessment.repository ? (
+              <Button className="w-full justify-start" onClick={() => setLocation("/repositories")} variant="outline">
+                View Connected Repository
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

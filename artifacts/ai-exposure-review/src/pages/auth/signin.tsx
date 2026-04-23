@@ -4,18 +4,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { login } from "@/lib/auth";
 import { Shield } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/lib/session";
 
 export default function SignIn() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { signIn } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    login();
-    setLocation("/dashboard");
+
+    setIsSubmitting(true);
+
+    try {
+      await signIn({ email, password });
+      setLocation("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Sign in failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -64,8 +81,8 @@ export default function SignIn() {
                 data-testid="input-password"
               />
             </div>
-            <Button type="submit" className="w-full" data-testid="button-submit">
-              Sign In
+            <Button type="submit" className="w-full" data-testid="button-submit" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 

@@ -32,6 +32,20 @@ const assessmentWithRepositoryInclude = {
   repository: {
     select: assessmentRepositorySelect,
   },
+  runs: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 1,
+    select: {
+      id: true,
+      status: true,
+      progressPercent: true,
+      findingsCount: true,
+      overallRiskLevel: true,
+      updatedAt: true,
+    },
+  },
 } satisfies Prisma.AssessmentInclude;
 
 type AssessmentWithRepository = Prisma.AssessmentGetPayload<{
@@ -378,6 +392,8 @@ export class AssessmentService {
   }
 
   serializeAssessment(assessment: AssessmentWithRepository) {
+    const latestRun = assessment.runs[0] ?? null;
+
     return {
       id: assessment.id,
       workspaceId: assessment.workspaceId,
@@ -397,6 +413,16 @@ export class AssessmentService {
         selectedScopeChecks: assessment.selectedScopeChecks,
         scopeSettings: normalizeScopeSettings(assessment.assessmentScopeSettings),
       },
+      latestRun: latestRun
+        ? {
+            id: latestRun.id,
+            status: latestRun.status,
+            progressPercent: latestRun.progressPercent,
+            findingsCount: latestRun.findingsCount,
+            overallRiskLevel: latestRun.overallRiskLevel,
+            updatedAt: latestRun.updatedAt.toISOString(),
+          }
+        : null,
       latestRunAt: assessment.latestRunAt?.toISOString() ?? null,
       createdAt: assessment.createdAt.toISOString(),
       updatedAt: assessment.updatedAt.toISOString(),

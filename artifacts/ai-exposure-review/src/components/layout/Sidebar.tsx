@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, ShieldAlert, GitBranch, FileText, Settings, LogOut, User } from "lucide-react";
+import { LayoutDashboard, ShieldAlert, GitBranch, FileText, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { logout } from "@/lib/auth";
+import { useSession } from "@/lib/session";
+import { getInitials } from "@/lib/presenters";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -12,12 +13,8 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const [location, setLocation] = useLocation();
-
-  const handleLogout = () => {
-    logout();
-    setLocation("/");
-  };
+  const [location] = useLocation();
+  const { activeWorkspace, user } = useSession();
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -53,11 +50,13 @@ export function Sidebar() {
       <div className="border-t p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
-            JD
+            {getInitials(user?.displayName ?? user?.email)}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-medium">Jane Doe</span>
-            <span className="text-xs text-muted-foreground">AppSec Lead</span>
+            <span className="text-sm font-medium">{user?.displayName ?? user?.email}</span>
+            <span className="text-xs text-muted-foreground">
+              {activeWorkspace?.name ?? "No active workspace"}
+            </span>
           </div>
         </div>
       </div>
