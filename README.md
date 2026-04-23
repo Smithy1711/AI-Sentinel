@@ -111,6 +111,8 @@ Notes:
 ```text
 - The web app builds as static assets and is served by [server.mjs](/c:/Users/Ben/Documents/Code/AI-Sentinel/artifacts/ai-exposure-review/server.mjs).
 - SPA route fallback is enabled, so direct links like `/reports/:id` will still load.
+- VITE_API_BASE_URL is a build-time variable. If you change it, redeploy the web service so the built frontend picks up the new value.
+- Use the public https API URL, for example https://your-api.up.railway.app, without appending /api/v1.
 ```
 
 ### Deployment scripts

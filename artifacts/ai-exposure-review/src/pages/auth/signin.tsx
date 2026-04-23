@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/lib/session";
+import { getApiRoot } from "@/lib/api";
 
 export default function SignIn() {
   const [, setLocation] = useLocation();
@@ -15,19 +17,23 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setIsSubmitting(true);
+    setFormError(null);
 
     try {
       await signIn({ email, password });
       setLocation("/dashboard");
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Please try again.";
+      setFormError(message);
       toast({
         title: "Sign in failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -52,6 +58,13 @@ export default function SignIn() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {formError ? (
+            <Alert className="mb-4" variant="destructive">
+              <AlertTitle>Unable to sign in</AlertTitle>
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -91,6 +104,10 @@ export default function SignIn() {
             <Link href="/signup" className="font-medium text-primary hover:underline">
               Create one
             </Link>
+          </div>
+
+          <div className="mt-4 border-t pt-4 text-xs text-muted-foreground">
+            API target: <span className="font-mono">{getApiRoot()}</span>
           </div>
         </CardContent>
       </Card>

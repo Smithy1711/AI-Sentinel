@@ -36,7 +36,7 @@ type ApiEnvelope<T> = {
 
 const API_PREFIX = "/api/v1";
 
-function getApiRoot() {
+export function getApiRoot() {
   const configured = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
   if (!configured) {
@@ -70,13 +70,26 @@ function buildUrl(path: string, query?: Record<string, string | undefined>) {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const payload = text ? (JSON.parse(text) as ApiEnvelope<T> | { message?: string; code?: string }) : null;
+  const payload = text
+    ? (JSON.parse(text) as
+        | ApiEnvelope<T>
+        | { message?: string; code?: string; error?: { message?: string; code?: string } })
+    : null;
 
   if (!response.ok) {
     throw new ApiError(
-      (payload && "message" in payload && payload.message) || "Request failed.",
+      (payload &&
+        "error" in payload &&
+        payload.error &&
+        payload.error.message) ||
+        (payload && "message" in payload && payload.message) ||
+        "Request failed.",
       response.status,
-      payload && "code" in payload ? payload.code : undefined,
+      (payload &&
+        "error" in payload &&
+        payload.error &&
+        payload.error.code) ||
+        (payload && "code" in payload ? payload.code : undefined),
     );
   }
 
@@ -97,6 +110,7 @@ export async function apiRequest<T>(
   } = {},
 ) {
   const headers = new Headers();
+  const requestUrl = buildUrl(path, options.query);
 
   if (options.body !== undefined) {
     headers.set("Content-Type", "application/json");
@@ -106,11 +120,23 @@ export async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${options.token}`);
   }
 
-  const response = await fetch(buildUrl(path, options.query), {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(requestUrl, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "(not set)";
+
+    throw new ApiError(
+      `Network request failed for ${requestUrl}. Check VITE_API_BASE_URL (${configuredBaseUrl}), confirm the API public URL uses https, and make sure API CORS_ORIGIN matches the web app URL.`,
+      0,
+      "NETWORK_REQUEST_FAILED",
+    );
+  }
 
   return parseResponse<T>(response);
 }
