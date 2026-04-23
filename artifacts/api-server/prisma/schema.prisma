@@ -1,0 +1,504 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum WorkspaceInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum IntegrationProviderType {
+  GITHUB
+  GITLAB
+  BITBUCKET
+}
+
+enum IntegrationConnectionStatus {
+  ACTIVE
+  ERROR
+  REVOKED
+  DISCONNECTED
+}
+
+enum RepositoryStatus {
+  CONNECTED
+  ERROR
+  DISCONNECTED
+  ARCHIVED
+}
+
+enum AssessmentStatus {
+  DRAFT
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  ARCHIVED
+}
+
+enum AssessmentRunStatus {
+  QUEUED
+  PREPARING
+  SCANNING
+  NORMALIZING
+  REPORT_GENERATION
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum AssessmentRunTrigger {
+  MANUAL
+  SCHEDULED
+  API
+  SYSTEM
+}
+
+enum FindingStatus {
+  OPEN
+  ACCEPTED_RISK
+  FIXED
+  FALSE_POSITIVE
+}
+
+enum FindingSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum RiskLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum FindingCategory {
+  PROMPT_INJECTION
+  INDIRECT_PROMPT_INJECTION
+  PROMPT_LEAKAGE
+  INSECURE_OUTPUT_HANDLING
+  EXCESSIVE_AGENCY
+  RAG_DATA_EXPOSURE
+  WEAK_AUTHZ
+  SECRETS_EXPOSURE
+  INSECURE_LOGGING
+  ABUSE_CONTROLS
+  SUPPLY_CHAIN
+  OTHER
+}
+
+enum ReportStatus {
+  DRAFT
+  GENERATED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AiArchitectureType {
+  CHAT
+  RAG
+  AGENT
+  WORKFLOW
+  CLASSIFIER
+  CONTENT_GENERATION
+  SEARCH
+  OTHER
+}
+
+model User {
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  displayName             String?
+  passwordHash            String?
+  activeWorkspaceId       String?
+  isActive                Boolean                  @default(true)
+  lastLoginAt             DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+  activeWorkspace         Workspace?               @relation("UserActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+  createdWorkspaces       Workspace[]              @relation("WorkspaceCreatedBy")
+  workspaceMemberships    WorkspaceMember[]
+  sentWorkspaceInvites    WorkspaceInvitation[]    @relation("WorkspaceInvitationSentBy")
+  createdRepositories     Repository[]             @relation("RepositoryCreatedBy")
+  createdAssessments      Assessment[]             @relation("AssessmentCreatedBy")
+  triggeredRuns           AssessmentRun[]          @relation("AssessmentRunTriggeredBy")
+  generatedReports        Report[]                 @relation("ReportGeneratedBy")
+  integrationConnections  IntegrationConnection[]  @relation("IntegrationConnectedBy")
+  integrationAuthSessions IntegrationAuthSession[]
+  auditLogs               AuditLog[]               @relation("AuditActor")
+
+  @@index([activeWorkspaceId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Workspace {
+  id                      String                   @id @default(cuid())
+  name                    String
+  slug                    String                   @unique
+  description             String?
+  createdByUserId         String?
+  isArchived              Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+  activeUsers             User[]                   @relation("UserActiveWorkspace")
+  createdByUser           User?                    @relation("WorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  members                 WorkspaceMember[]
+  invitations             WorkspaceInvitation[]
+  repositories            Repository[]
+  assessments             Assessment[]
+  assessmentRuns          AssessmentRun[]
+  findings                Finding[]
+  reports                 Report[]
+  integrationConnections  IntegrationConnection[]
+  integrationAuthSessions IntegrationAuthSession[]
+  auditLogs               AuditLog[]
+
+  @@index([createdByUserId])
+  @@index([deletedAt])
+  @@index([isArchived, deletedAt])
+  @@map("workspaces")
+}
+
+model WorkspaceInvitation {
+  id              String                    @id @default(cuid())
+  workspaceId     String
+  email           String
+  role            WorkspaceMemberRole
+  status          WorkspaceInvitationStatus @default(PENDING)
+  token           String                    @unique
+  invitedByUserId String?
+  expiresAt       DateTime?
+  acceptedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  deletedAt       DateTime?
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedByUser   User?                     @relation("WorkspaceInvitationSentBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([email, status])
+  @@index([deletedAt])
+  @@map("workspace_invitations")
+}
+
+model WorkspaceMember {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  userId          String
+  role            WorkspaceMemberRole
+  invitedByUserId String?
+  joinedAt        DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId, role])
+  @@index([deletedAt])
+  @@map("workspace_members")
+}
+
+model IntegrationConnection {
+  id                    String                      @id @default(cuid())
+  workspaceId           String
+  connectedByUserId     String?
+  provider              IntegrationProviderType
+  status                IntegrationConnectionStatus @default(ACTIVE)
+  displayName           String?
+  externalAccountId     String?
+  externalAccountLogin  String?
+  installationId        String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+  scopes                String[]                    @default([])
+  providerMetadata      Json?
+  lastSyncedAt          DateTime?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  deletedAt             DateTime?
+  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedByUser       User?                       @relation("IntegrationConnectedBy", fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  repositories          Repository[]
+  authSessions          IntegrationAuthSession[]
+
+  @@unique([workspaceId, provider, externalAccountId])
+  @@index([workspaceId, provider])
+  @@index([workspaceId, status])
+  @@index([deletedAt])
+  @@map("integration_connections")
+}
+
+model IntegrationAuthSession {
+  id                      String                  @id @default(cuid())
+  workspaceId             String
+  userId                  String
+  provider                IntegrationProviderType
+  integrationConnectionId String?
+  state                   String                  @unique
+  codeVerifier            String
+  expiresAt               DateTime
+  consumedAt              DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  workspace               Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integrationConnection   IntegrationConnection?  @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, provider, expiresAt])
+  @@index([userId, provider, expiresAt])
+  @@index([provider, state, consumedAt])
+  @@map("integration_auth_sessions")
+}
+
+model Repository {
+  id                      String                  @id @default(cuid())
+  workspaceId             String
+  integrationConnectionId String?
+  createdByUserId         String?
+  provider                IntegrationProviderType
+  status                  RepositoryStatus        @default(CONNECTED)
+  externalId              String?
+  owner                   String
+  name                    String
+  fullName                String
+  url                     String?
+  isPrivate               Boolean                 @default(true)
+  defaultBranch           String?
+  branch                  String?
+  providerMetadata        Json?
+  lastSyncedAt            DateTime?
+  lastScannedAt           DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  deletedAt               DateTime?
+  workspace               Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integrationConnection   IntegrationConnection?  @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+  createdByUser           User?                   @relation("RepositoryCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  assessments             Assessment[]
+
+  @@unique([workspaceId, provider, fullName])
+  @@index([integrationConnectionId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, lastScannedAt])
+  @@index([provider, externalId])
+  @@map("repositories")
+}
+
+model Assessment {
+  id                      String              @id @default(cuid())
+  workspaceId             String
+  repositoryId            String?
+  createdByUserId         String?
+  name                    String
+  description             String?
+  status                  AssessmentStatus    @default(DRAFT)
+  aiProvider              String?
+  aiArchitectureType      AiArchitectureType?
+  stagingUrl              String?
+  branch                  String?
+  credentialsPlaceholder  String?
+  selectedScopeChecks     String[]            @default([])
+  assessmentScopeSettings Json?
+  providerMetadata        Json?
+  latestRunAt             DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  deletedAt               DateTime?
+  workspace               Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repository              Repository?         @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  createdByUser           User?               @relation("AssessmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  runs                    AssessmentRun[]
+  findings                Finding[]
+  reports                 Report[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, repositoryId])
+  @@index([workspaceId, deletedAt])
+  @@index([createdByUserId])
+  @@index([aiProvider])
+  @@index([aiArchitectureType])
+  @@map("assessments")
+}
+
+model AssessmentRun {
+  id                String               @id @default(cuid())
+  workspaceId       String
+  assessmentId      String
+  triggeredByUserId String?
+  status            AssessmentRunStatus  @default(QUEUED)
+  triggerSource     AssessmentRunTrigger @default(MANUAL)
+  queueJobId        String?
+  progressPercent   Int                  @default(0)
+  currentMessage    String?
+  branch            String?
+  stagingUrl        String?
+  scopeSettings     Json?
+  providerMetadata  Json?
+  engineVersion     String?
+  overallRiskLevel  RiskLevel?
+  findingsCount     Int                  @default(0)
+  queuedAt          DateTime             @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+  canceledAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  assessment        Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  workspace         Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  triggeredByUser   User?                @relation("AssessmentRunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  findings          Finding[]
+  reports           Report[]
+  events            AssessmentRunEvent[]
+
+  @@index([assessmentId, createdAt])
+  @@index([workspaceId, status])
+  @@index([triggeredByUserId])
+  @@index([overallRiskLevel])
+  @@index([queueJobId])
+  @@map("assessment_runs")
+}
+
+model AssessmentRunEvent {
+  id              String              @id @default(cuid())
+  assessmentRunId String
+  status          AssessmentRunStatus
+  progressPercent Int?
+  message         String
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+  assessmentRun   AssessmentRun       @relation(fields: [assessmentRunId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentRunId, createdAt])
+  @@map("assessment_run_events")
+}
+
+model Finding {
+  id                     String          @id @default(cuid())
+  workspaceId            String
+  assessmentId           String
+  assessmentRunId        String
+  status                 FindingStatus   @default(OPEN)
+  severity               FindingSeverity
+  riskLevel              RiskLevel
+  confidence             ConfidenceLevel
+  category               FindingCategory
+  title                  String
+  summary                String?
+  description            String?
+  ruleKey                String?
+  fingerprint            String?
+  affectedComponent      String?
+  affectedFilePath       String?
+  affectedEndpoint       String?
+  affectedLineStart      Int?
+  affectedLineEnd        Int?
+  evidenceSummary        String?
+  recommendedRemediation String?
+  evidence               Json?
+  remediation            Json?
+  metadata               Json?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  deletedAt              DateTime?
+  workspace              Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assessment             Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentRun          AssessmentRun   @relation(fields: [assessmentRunId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentRunId, severity])
+  @@index([assessmentId, status])
+  @@index([workspaceId, riskLevel])
+  @@index([workspaceId, category])
+  @@index([workspaceId, confidence])
+  @@index([ruleKey])
+  @@index([fingerprint])
+  @@index([deletedAt])
+  @@map("findings")
+}
+
+model Report {
+  id                 String         @id @default(cuid())
+  workspaceId        String
+  assessmentId       String
+  assessmentRunId    String?
+  generatedByUserId  String?
+  status             ReportStatus   @default(DRAFT)
+  version            Int            @default(1)
+  riskLevel          RiskLevel?
+  title              String
+  executiveSummary   String?
+  summaryJson        Json?
+  remediationRoadmap Json?
+  publishedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  deletedAt          DateTime?
+  workspace          Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assessment         Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentRun      AssessmentRun? @relation(fields: [assessmentRunId], references: [id], onDelete: SetNull)
+  generatedByUser    User?          @relation("ReportGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([assessmentId, createdAt])
+  @@index([workspaceId, status])
+  @@index([assessmentRunId])
+  @@index([deletedAt])
+  @@map("reports")
+}
+
+model AuditLog {
+  id              String     @id @default(cuid())
+  workspaceId     String?
+  actorUserId     String?
+  assessmentId    String?
+  assessmentRunId String?
+  action          String
+  entityType      String
+  entityId        String?
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime   @default(now())
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actorUser       User?      @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([assessmentId, createdAt])
+  @@index([assessmentRunId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

@@ -1,0 +1,245 @@
+Build a polished frontend-only MVP for an AI security assessment platform called "AI Exposure Review".
+
+This is NOT a penetration testing platform. It is a lightweight AI application security review product for companies building AI-enabled SaaS products, copilots, agent workflows, and RAG applications.
+
+Goal:
+Create the frontend experience for a user who connects a code repository and optionally a staging URL, then receives an automated AI security assessment report. This should feel credible, modern, and B2B SaaS, not playful or consumer-focused.
+
+Product positioning:
+- A lightweight AI security baseline assessment
+- Focused on AI-specific risks such as prompt injection, indirect prompt injection, insecure output handling, excessive tool access, data leakage, RAG exposure, model misuse, weak auth around AI features, missing rate limits, and poor logging/redaction
+- Not a real pen test
+- Report-driven workflow
+
+Build this as a responsive single-page app with clean routing and reusable components.
+Use a modern SaaS design style:
+- dark-on-light or light-on-light professional UI
+- minimal, sharp, enterprise feel
+- clear typography
+- subtle cards, borders, badges, tables, progress indicators
+- no childish gradients or overly flashy visuals
+
+Frontend requirements:
+
+1. Landing page
+Include:
+- headline explaining the product
+- short subheading
+- CTA buttons: "Start Assessment" and "View Sample Report"
+- a section explaining how it works in 3 steps:
+  1) Connect repo
+  2) Run AI security checks
+  3) Review report
+- a section listing example checks:
+  - prompt injection exposure
+  - hidden prompt leakage
+  - unsafe tool invocation
+  - RAG / retrieval leakage
+  - insecure output handling
+  - cost abuse / denial of wallet
+- a trust section showing “Repo scan”, “Runtime probes”, “OWASP-aligned categories”, “Actionable remediation”
+- footer
+
+2. Auth screens UI only
+Create:
+- Sign in page
+- Create account page
+- Forgot password page
+These do not need real auth.
+Use mocked form validation and polished states.
+
+3. App shell after login
+Create a left sidebar navigation with:
+- Dashboard
+- Assessments
+- Repositories
+- Reports
+- Settings
+
+Top bar should include:
+- workspace selector
+- search bar
+- notifications icon
+- user avatar dropdown
+
+4. Dashboard
+Show:
+- summary cards:
+  - Active assessments
+  - High severity findings
+  - Connected repos
+  - Last generated reports
+- recent activity feed
+- findings by severity chart
+- assessment status table
+- “Start new assessment” primary CTA
+
+Use realistic mocked data.
+
+5. New assessment flow
+Build a multi-step wizard:
+- Step 1: Connect repository
+  - GitHub, GitLab, Bitbucket buttons
+  - repo URL input
+  - branch selector
+- Step 2: App details
+  - staging URL
+  - optional test credentials
+  - AI provider select
+  - AI architecture type:
+    - LLM app
+    - RAG app
+    - Agent workflow
+    - Internal copilot
+    - Other
+- Step 3: Assessment scope
+  - checkboxes for:
+    - static repo scan
+    - prompt injection checks
+    - RAG checks
+    - tool calling / agent checks
+    - auth and tenancy review
+    - secrets / logging review
+    - rate limiting and abuse controls
+- Step 4: Review and launch
+
+Add a polished completion screen showing the assessment queued.
+
+6. Assessments page
+Create a table of assessments with:
+- company / project name
+- repo
+- status
+- created date
+- score
+- risk level
+- actions
+Statuses:
+- Draft
+- Queued
+- Running
+- Completed
+- Failed
+
+Clicking an assessment should open a detailed assessment view.
+
+7. Assessment detail view
+Show:
+- header with project name, status, score, and risk badge
+- timeline/progress tracker
+- connected assets section
+- detected AI surface section:
+  - model provider
+  - frameworks
+  - vector store
+  - tool integrations
+  - public endpoints
+- findings summary cards
+- tabs:
+  - Overview
+  - Findings
+  - Evidence
+  - Report
+  - Activity
+
+8. Findings UI
+Create a professional findings list with filters:
+- severity
+- category
+- status
+- confidence
+- component
+
+Each finding card or row should show:
+- title
+- severity badge
+- category
+- confidence
+- short description
+- impacted component/file
+- recommended action
+- expand/collapse for evidence
+
+Use realistic example findings such as:
+- Untrusted retrieved content inserted into prompt without sanitisation
+- Agent action route lacks confirmation gate for external email send
+- Prompt and response logging may expose sensitive user data
+- Missing spend/rate limits on AI inference endpoint
+- System prompt appears retrievable from debug response
+
+9. Report page
+Build a report viewer that looks export-ready.
+Include:
+- executive summary
+- overall risk rating
+- assessment scope
+- key findings
+- mapped categories
+- remediation roadmap:
+  - Fix now
+  - Next
+  - Later
+- appendix of findings
+
+Add buttons:
+- Download PDF
+- Export JSON
+- Share report
+These can be mocked.
+
+10. Repositories page
+Show connected repositories in a table/grid with:
+- provider
+- repo name
+- default branch
+- last scan
+- linked assessments
+- status
+
+Include an “Add repository” modal.
+
+11. Settings page
+Sections:
+- Workspace settings
+- Integrations
+- Notifications
+- Report branding
+- API access
+- Billing placeholder
+
+12. Sample data and UX
+Use realistic mocked B2B sample data throughout.
+The product should feel like it is already used by security-conscious SaaS teams.
+Include loading states, empty states, success toasts, error banners, disabled states, and modal confirmations.
+
+13. Technical frontend constraints
+- Frontend only
+- No real backend integration yet
+- Use mocked JSON data and local state
+- Component-based architecture
+- Clean file structure
+- Easy to extend later with a real backend
+- Strong TypeScript types if using TypeScript
+- Reusable UI components
+- Responsive for desktop first, but usable on tablet/mobile
+
+14. Design references
+The visual style should resemble a modern security / devtools SaaS product:
+- calm, professional, operational
+- not hacker-themed
+- not marketing-heavy
+- should look credible to a CTO, security lead, or investor
+
+15. Important scope boundary
+Do not build actual scanning logic.
+Do not build real auth.
+Do not build real repo integrations.
+Only create the frontend product experience with mocked data and believable flows.
+
+At the end, generate:
+- all pages
+- all components
+- mock data models
+- responsive navigation
+- polished UI states
+- a coherent design system

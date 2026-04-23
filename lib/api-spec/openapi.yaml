@@ -1,0 +1,645 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: API specification for the AI Exposure Review backend
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health and service metadata
+  - name: workspaces
+    description: Workspace management
+  - name: repositories
+    description: Source control repository connections
+  - name: assessments
+    description: AI application security assessment configuration and launch
+  - name: jobs
+    description: Assessment job tracking
+  - name: activity
+    description: Workspace activity log
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status and environment metadata
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      tags: [workspaces]
+      summary: List workspaces
+      responses:
+        "200":
+          description: Workspace list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceListResponse"
+    post:
+      operationId: createWorkspace
+      tags: [workspaces]
+      summary: Create workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+        "409":
+          description: Workspace slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /workspaces/{workspaceId}/repositories:
+    get:
+      operationId: listWorkspaceRepositories
+      tags: [repositories]
+      summary: List repositories for a workspace
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Repository list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryListResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /workspaces/{workspaceId}/activity:
+    get:
+      operationId: listWorkspaceActivity
+      tags: [activity]
+      summary: List workspace activity
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityEventListResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /repositories:
+    post:
+      operationId: createRepository
+      tags: [repositories]
+      summary: Connect a repository
+      description: Creates a repository record for the first supported provider, GitHub.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRepositoryRequest"
+      responses:
+        "201":
+          description: Repository created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryResponse"
+        "404":
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Repository already connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assessments:
+    get:
+      operationId: listAssessments
+      tags: [assessments]
+      summary: List assessments
+      parameters:
+        - in: query
+          name: workspaceId
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Optional workspace filter
+      responses:
+        "200":
+          description: Assessment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentListResponse"
+    post:
+      operationId: createAssessment
+      tags: [assessments]
+      summary: Create an assessment
+      description: Creates an assessment configuration. This scaffolds workflow metadata only and does not run a real scanner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssessmentRequest"
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace or repository not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assessments/{assessmentId}:
+    get:
+      operationId: getAssessment
+      tags: [assessments]
+      summary: Get assessment
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+      responses:
+        "200":
+          description: Assessment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentResponse"
+        "404":
+          description: Assessment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assessments/{assessmentId}/launch:
+    post:
+      operationId: launchAssessment
+      tags: [assessments]
+      summary: Launch assessment
+      description: Queues an assessment job. The scanner engine is intentionally scaffolded only at this stage.
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+      responses:
+        "202":
+          description: Assessment queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LaunchAssessmentResponse"
+        "404":
+          description: Assessment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Assessment cannot be launched in its current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /jobs/{jobId}:
+    get:
+      operationId: getJobRun
+      tags: [jobs]
+      summary: Get job run
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobRunResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  parameters:
+    WorkspaceId:
+      in: path
+      name: workspaceId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssessmentId:
+      in: path
+      name: assessmentId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ErrorDetail:
+      type: object
+      additionalProperties: true
+    ErrorBody:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          $ref: "#/components/schemas/ErrorDetail"
+      required:
+        - code
+        - message
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorBody"
+      required:
+        - error
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        environment:
+          type: string
+      required:
+        - status
+        - service
+        - environment
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - createdAt
+        - updatedAt
+    WorkspaceResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Workspace"
+      required:
+        - data
+    WorkspaceListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Workspace"
+      required:
+        - data
+    CreateWorkspaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+        - name
+    RepositoryProvider:
+      type: string
+      enum: [github]
+    RepositoryConnectionStatus:
+      type: string
+      enum: [connected]
+    Repository:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        provider:
+          $ref: "#/components/schemas/RepositoryProvider"
+        owner:
+          type: string
+        name:
+          type: string
+        fullName:
+          type: string
+        defaultBranch:
+          type: string
+        connectionStatus:
+          $ref: "#/components/schemas/RepositoryConnectionStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workspaceId
+        - provider
+        - owner
+        - name
+        - fullName
+        - defaultBranch
+        - connectionStatus
+        - createdAt
+        - updatedAt
+    RepositoryResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Repository"
+      required:
+        - data
+    RepositoryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Repository"
+      required:
+        - data
+    CreateRepositoryRequest:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        provider:
+          $ref: "#/components/schemas/RepositoryProvider"
+        owner:
+          type: string
+        name:
+          type: string
+        defaultBranch:
+          type: string
+        externalId:
+          type: string
+      required:
+        - workspaceId
+        - provider
+        - owner
+        - name
+    AssessmentStatus:
+      type: string
+      enum: [draft, queued, running, completed, failed]
+    AssessmentScannerProfile:
+      type: string
+      enum: [baseline]
+    Assessment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        repositoryId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/AssessmentStatus"
+        targetBranch:
+          type: string
+          nullable: true
+        stagingUrl:
+          type: string
+          format: uri
+          nullable: true
+        runtimeChecksEnabled:
+          type: boolean
+        scannerProfile:
+          $ref: "#/components/schemas/AssessmentScannerProfile"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        launchedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - workspaceId
+        - repositoryId
+        - name
+        - status
+        - targetBranch
+        - stagingUrl
+        - runtimeChecksEnabled
+        - scannerProfile
+        - createdAt
+        - updatedAt
+        - launchedAt
+    AssessmentResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Assessment"
+      required:
+        - data
+    AssessmentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Assessment"
+      required:
+        - data
+    CreateAssessmentRequest:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        repositoryId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        targetBranch:
+          type: string
+        stagingUrl:
+          type: string
+          format: uri
+        runtimeChecksEnabled:
+          type: boolean
+      required:
+        - workspaceId
+        - repositoryId
+        - name
+    JobRunKind:
+      type: string
+      enum: [assessment]
+    JobRunStatus:
+      type: string
+      enum: [queued, running, completed, failed]
+    JobRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessmentId:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/JobRunKind"
+        status:
+          $ref: "#/components/schemas/JobRunStatus"
+        currentStep:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - assessmentId
+        - kind
+        - status
+        - currentStep
+        - createdAt
+        - startedAt
+        - completedAt
+    JobRunResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/JobRun"
+      required:
+        - data
+    LaunchAssessmentResult:
+      type: object
+      properties:
+        assessment:
+          $ref: "#/components/schemas/Assessment"
+        job:
+          $ref: "#/components/schemas/JobRun"
+      required:
+        - assessment
+        - job
+    LaunchAssessmentResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/LaunchAssessmentResult"
+      required:
+        - data
+    ActivityEntityType:
+      type: string
+      enum: [workspace, repository, assessment, job]
+    ActivityEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        entityType:
+          $ref: "#/components/schemas/ActivityEntityType"
+        entityId:
+          type: string
+          format: uuid
+        action:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workspaceId
+        - entityType
+        - entityId
+        - action
+        - message
+        - createdAt
+    ActivityEventListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
+      required:
+        - data

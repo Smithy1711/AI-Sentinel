@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd ../.. && pnpm install --frozen-lockfile && pnpm railway:api:build"
+
+[deploy]
+startCommand = "cd ../.. && pnpm railway:api:start"
+healthcheckPath = "/api/v1/health"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
